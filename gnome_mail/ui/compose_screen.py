@@ -21,7 +21,7 @@ class ComposeScreen:
         self.toast_manager = toast_manager
         self.visible = False
         self._models = []
-        self._model_display = []  # "GnomeName (model)" display strings
+        self._model_display = []  # gnome name display strings
         self._result = None  # Set when send succeeds, read by app
 
         # Widgets created on open()

@@ -64,7 +64,8 @@ class GnomeMailApp:
         self.settings_screen = SettingsScreen(self.toast_manager)
 
         # Settings gnome clickable area (bottom-left corner)
-        self._settings_gnome_rect = pygame.Rect(4, 0, 44, 50)
+        h = self.screen.get_height()
+        self._settings_gnome_rect = pygame.Rect(4, h - 50, 44, 50)
         self._settings_hovered = False
 
         # Header button
