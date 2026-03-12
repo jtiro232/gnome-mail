@@ -8,7 +8,7 @@ from gnome_mail.ui.theme import (
     get_font,
 )
 from gnome_mail.ui.widgets import word_wrap_text, Button
-from gnome_mail.gnome_art import draw_gnome, draw_tiny_mushroom
+from gnome_mail.gnome_art import draw_gnome, draw_tiny_mushroom, draw_gnome_snail_riders
 from gnome_mail import constants, db
 
 
@@ -158,9 +158,10 @@ class MessagePanel:
         pygame.draw.line(surface, DIVIDER, (content_x, y), (content_x + content_w, y))
         y += 12
 
-        # "You whispered" label
+        # "You Wrote" label with mushroom decoration
+        draw_tiny_mushroom(surface, content_x, y + 2)
         you_surf = font_small.render(constants.YOU_LABEL, True, ACCENT_LIGHT)
-        surface.blit(you_surf, (content_x, y))
+        surface.blit(you_surf, (content_x + 18, y))
         y += you_surf.get_height() + 6
 
         # User message (word-wrapped)
@@ -177,10 +178,11 @@ class MessagePanel:
 
         status = conv["status"]
         if status == "complete" and conv.get("assistant_response"):
-            # Response label with gnome name
+            # Response label with gnome name and mushroom decoration
+            draw_tiny_mushroom(surface, content_x, y + 2)
             resp_label = constants.RESPONSE_LABEL_TEMPLATE.format(gnome_name)
             resp_label_surf = font_small.render(resp_label, True, GREEN_ACCENT)
-            surface.blit(resp_label_surf, (content_x, y))
+            surface.blit(resp_label_surf, (content_x + 18, y))
             y += resp_label_surf.get_height() + 6
 
             # Response text (word-wrapped)
@@ -191,14 +193,16 @@ class MessagePanel:
                 y += font_body.get_linesize()
 
         elif status == "pending":
-            # Walking gnome + waiting text
+            # Gnome snail riders + waiting text
             gnome_x = content_x + content_w // 2
-            gnome_y = y + 20
-            draw_gnome(surface, gnome_x, gnome_y, 1.2, "walking")
-            y += 80
-            wait_surf = font_body.render(constants.WAITING_RESPONSE, True, TEXT_DIM)
-            surface.blit(wait_surf, (content_x + (content_w - wait_surf.get_width()) // 2, y))
-            y += wait_surf.get_height()
+            gnome_y = y + 30
+            draw_gnome_snail_riders(surface, gnome_x, gnome_y, 1.0)
+            y += 90
+            wait_lines = word_wrap_text(constants.WAITING_RESPONSE, font_body, content_w)
+            for line in wait_lines:
+                line_surf = font_body.render(line, True, TEXT_DIM)
+                surface.blit(line_surf, (content_x + (content_w - line_surf.get_width()) // 2, y))
+                y += font_body.get_linesize()
 
         elif status == "error":
             # Sad gnome + error text

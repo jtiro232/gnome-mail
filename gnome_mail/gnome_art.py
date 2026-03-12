@@ -761,6 +761,191 @@ def draw_gnome_with_quill(surface, x, y, scale=1.0):
     pygame.draw.circle(surface, (30, 30, 60), (quill_tip[0] + int(2 * s), quill_tip[1] + int(3 * s)), max(1, int(1 * s)))
 
 
+def _draw_single_snail_rider(surface, x, y, s, index, shell_color):
+    """Draw one snail with a gnome rider. Helper for draw_gnome_snail_riders."""
+    body_color = (160, 150, 120)
+    body_dark = (140, 130, 100)
+    eye_color = (40, 35, 30)
+
+    # Shadow beneath snail
+    _shadow(surface, x, y + int(18 * s), int(34 * s), int(8 * s), 30)
+
+    # Slime trail behind the snail
+    slime = pygame.Surface((int(40 * s), int(4 * s)), pygame.SRCALPHA)
+    pygame.draw.rect(slime, (140, 180, 120, 50), (0, 0, int(40 * s), int(4 * s)),
+                     border_radius=max(1, int(2 * s)))
+    surface.blit(slime, (x - int(38 * s), y + int(14 * s)))
+
+    # Snail body (slug part) - elongated ellipse
+    pygame.draw.ellipse(surface, body_color,
+                        (x - int(18 * s), y + int(8 * s), int(36 * s), int(12 * s)))
+    # Body shading
+    pygame.draw.ellipse(surface, body_dark,
+                        (x - int(16 * s), y + int(14 * s), int(32 * s), int(6 * s)))
+
+    # Head bump at front
+    pygame.draw.circle(surface, body_color, (x + int(16 * s), y + int(10 * s)), int(6 * s))
+    pygame.draw.circle(surface, (170, 160, 130), (x + int(17 * s), y + int(9 * s)), int(4 * s))
+
+    # Eye stalks
+    for dx in [-3, 3]:
+        stalk_base_x = x + int(18 * s) + int(dx * s)
+        stalk_base_y = y + int(6 * s)
+        stalk_top_x = stalk_base_x + int(dx * 0.5 * s)
+        stalk_top_y = stalk_base_y - int(8 * s)
+        pygame.draw.line(surface, body_color,
+                         (stalk_base_x, stalk_base_y),
+                         (stalk_top_x, stalk_top_y), max(1, int(2 * s)))
+        # Eye ball
+        pygame.draw.circle(surface, (240, 235, 225),
+                           (stalk_top_x, stalk_top_y), max(1, int(3 * s)))
+        pygame.draw.circle(surface, eye_color,
+                           (stalk_top_x + int(1 * s), stalk_top_y), max(1, int(2 * s)))
+        # Eye shine
+        pygame.draw.circle(surface, (255, 255, 255),
+                           (stalk_top_x, stalk_top_y - int(1 * s)), max(1, int(1 * s)))
+
+    # Shell - main dome
+    shell_w = int(24 * s)
+    shell_h = int(20 * s)
+    shell_x = x - int(6 * s)
+    shell_y = y - int(8 * s)
+    pygame.draw.ellipse(surface, shell_color,
+                        (shell_x, shell_y, shell_w, shell_h))
+    # Shell darker bottom edge
+    shell_dark = tuple(max(0, c - 30) for c in shell_color)
+    pygame.draw.ellipse(surface, shell_dark,
+                        (shell_x + int(2 * s), shell_y + int(12 * s), shell_w - int(4 * s), int(8 * s)))
+    # Shell highlight
+    shell_light = tuple(min(255, c + 40) for c in shell_color)
+    pygame.draw.ellipse(surface, shell_light,
+                        (shell_x + int(4 * s), shell_y + int(2 * s), int(10 * s), int(8 * s)))
+    # Shell spiral pattern
+    spiral_color = tuple(max(0, c - 15) for c in shell_color)
+    pygame.draw.arc(surface, spiral_color,
+                    (shell_x + int(6 * s), shell_y + int(4 * s), int(12 * s), int(12 * s)),
+                    0.3, math.pi * 1.5, max(1, int(2 * s)))
+    pygame.draw.arc(surface, spiral_color,
+                    (shell_x + int(8 * s), shell_y + int(6 * s), int(8 * s), int(8 * s)),
+                    0.5, math.pi * 1.3, max(1, int(1 * s)))
+
+    # === Gnome rider on top of shell ===
+    hat_color = HAT_COLORS[index % len(HAT_COLORS)]
+    tunic_color = TUNIC_COLORS[index % len(TUNIC_COLORS)]
+
+    gnome_x = shell_x + shell_w // 2
+    gnome_y = shell_y - int(2 * s)
+
+    # Gnome body (small ellipse sitting on shell)
+    pygame.draw.ellipse(surface, tunic_color,
+                        (gnome_x - int(6 * s), gnome_y - int(4 * s), int(12 * s), int(10 * s)))
+    # Belt
+    pygame.draw.rect(surface, ACCENT,
+                     (gnome_x - int(6 * s), gnome_y + int(2 * s), int(12 * s), int(2 * s)))
+
+    # Head
+    head_y = gnome_y - int(10 * s)
+    pygame.draw.circle(surface, GNOME_SKIN, (gnome_x, head_y), int(5 * s))
+    # Cheek blush
+    pygame.draw.circle(surface, (220, 160, 140),
+                       (gnome_x - int(4 * s), head_y + int(1 * s)), max(1, int(2 * s)))
+    pygame.draw.circle(surface, (220, 160, 140),
+                       (gnome_x + int(4 * s), head_y + int(1 * s)), max(1, int(2 * s)))
+    # Nose
+    pygame.draw.circle(surface, (195, 155, 120),
+                       (gnome_x, head_y + int(1 * s)), max(1, int(2 * s)))
+    # Beard
+    pygame.draw.ellipse(surface, (240, 235, 225),
+                        (gnome_x - int(4 * s), head_y + int(1 * s), int(8 * s), int(7 * s)))
+    # Eyes
+    pygame.draw.circle(surface, (250, 248, 240),
+                       (gnome_x - int(2 * s), head_y - int(2 * s)), max(1, int(2 * s)))
+    pygame.draw.circle(surface, (250, 248, 240),
+                       (gnome_x + int(2 * s), head_y - int(2 * s)), max(1, int(2 * s)))
+    pygame.draw.circle(surface, eye_color,
+                       (gnome_x - int(2 * s), head_y - int(2 * s)), max(1, int(1 * s)))
+    pygame.draw.circle(surface, eye_color,
+                       (gnome_x + int(2 * s), head_y - int(2 * s)), max(1, int(1 * s)))
+
+    # Hat
+    hat_points = [
+        (gnome_x, head_y - int(18 * s)),
+        (gnome_x - int(7 * s), head_y - int(4 * s)),
+        (gnome_x + int(7 * s), head_y - int(4 * s)),
+    ]
+    pygame.draw.polygon(surface, hat_color, hat_points)
+    # Hat highlight
+    lighter_hat = tuple(min(255, c + 40) for c in hat_color)
+    pygame.draw.line(surface, lighter_hat,
+                     (gnome_x - int(1 * s), head_y - int(16 * s)),
+                     (gnome_x - int(5 * s), head_y - int(6 * s)), max(1, int(1 * s)))
+    # Hat brim
+    pygame.draw.ellipse(surface, tuple(max(0, c - 15) for c in hat_color),
+                        (gnome_x - int(8 * s), head_y - int(5 * s), int(16 * s), int(4 * s)))
+
+    # Arms
+    # Left arm holding reins (line to eye stalk)
+    stalk_target_x = x + int(15 * s)
+    stalk_target_y = y + int(2 * s)
+    pygame.draw.line(surface, tunic_color,
+                     (gnome_x - int(6 * s), gnome_y),
+                     (stalk_target_x, stalk_target_y), max(1, int(2 * s)))
+    pygame.draw.circle(surface, GNOME_SKIN, (stalk_target_x, stalk_target_y), max(1, int(2 * s)))
+    # Rein line from hand to stalk
+    pygame.draw.line(surface, ACCENT,
+                     (stalk_target_x, stalk_target_y),
+                     (x + int(16 * s), y + int(0 * s)), 1)
+
+    # Right arm holding a scroll
+    scroll_x = gnome_x + int(10 * s)
+    scroll_y = gnome_y - int(2 * s)
+    pygame.draw.line(surface, tunic_color,
+                     (gnome_x + int(6 * s), gnome_y),
+                     (scroll_x, scroll_y), max(1, int(2 * s)))
+    pygame.draw.circle(surface, GNOME_SKIN, (scroll_x, scroll_y), max(1, int(2 * s)))
+    # Tiny scroll
+    pygame.draw.rect(surface, (230, 220, 190),
+                     (scroll_x - int(1 * s), scroll_y - int(4 * s), int(3 * s), int(7 * s)),
+                     border_radius=max(1, int(1 * s)))
+    pygame.draw.line(surface, MUSHROOM_RED,
+                     (scroll_x, scroll_y - int(2 * s)),
+                     (scroll_x, scroll_y + int(1 * s)), 1)
+
+
+def draw_gnome_snail_riders(surface, x, y, scale=1.0):
+    """A procession of gnomes riding snails, delivering messages with haste."""
+    s = scale
+
+    snail_positions = [
+        (x - int(55 * s), y + int(5 * s)),
+        (x, y),
+        (x + int(55 * s), y + int(3 * s)),
+    ]
+
+    shell_colors = [
+        (140, 110, 70),   # brown
+        (100, 130, 80),   # green
+        (170, 140, 60),   # amber
+    ]
+
+    for i, (sx, sy) in enumerate(snail_positions):
+        _draw_single_snail_rider(surface, sx, sy, s, i, shell_colors[i])
+
+    # Dust/motion particles behind the procession
+    for dx, dy, alpha in [(-72, 12, 70), (-78, 6, 50), (-84, 14, 35)]:
+        particle = pygame.Surface((int(6 * s), int(6 * s)), pygame.SRCALPHA)
+        pygame.draw.circle(particle, (180, 170, 140, alpha),
+                           (int(3 * s), int(3 * s)), int(3 * s))
+        surface.blit(particle, (x + int(dx * s), y + int(dy * s)))
+
+    # Sparkle/magic trail particles
+    for dx, dy in [(-30, -5), (25, -8), (60, -3)]:
+        spark = pygame.Surface((int(4 * s), int(4 * s)), pygame.SRCALPHA)
+        pygame.draw.circle(spark, (220, 200, 120, 100),
+                           (int(2 * s), int(2 * s)), int(2 * s))
+        surface.blit(spark, (x + int(dx * s), y + int(dy * s)))
+
+
 def draw_mushroom_house(surface, x, y, scale=1.0):
     """A mushroom with a door and windows, like a gnome home."""
     s = scale

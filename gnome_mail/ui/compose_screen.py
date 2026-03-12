@@ -7,7 +7,7 @@ from gnome_mail.ui.theme import (
     PANEL_BG, TEXT_COLOR, TEXT_DIM, ACCENT_LIGHT, PADDING, get_font,
 )
 from gnome_mail.ui.widgets import Button, TextArea, Dropdown, ToastManager
-from gnome_mail.gnome_art import draw_gnome_with_quill, draw_toadstool_border
+from gnome_mail.gnome_art import draw_gnome_with_quill, draw_toadstool_border, draw_tiny_mushroom
 from gnome_mail import constants
 
 
@@ -193,6 +193,7 @@ class ComposeScreen:
         font_title = get_font("title", bold=True)
         title_surf = font_title.render(constants.COMPOSE_TITLE, True, TEXT_COLOR)
         surface.blit(title_surf, (px + 80, py + PADDING))
+        draw_tiny_mushroom(surface, px + 80 + title_surf.get_width() + 8, py + PADDING + 6)
 
         # Model dropdown label
         font_small = get_font("small")
