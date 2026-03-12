@@ -24,12 +24,11 @@ EOF
 
 chmod +x "$DESKTOP_FILE"
 
-# Also copy to Desktop if it exists
-if [ -d "$HOME/Desktop" ]; then
-    cp "$DESKTOP_FILE" "$HOME/Desktop/gnome-mail.desktop"
-    chmod +x "$HOME/Desktop/gnome-mail.desktop"
-    echo "Shortcut added to your Desktop!"
-fi
+# Always copy to Desktop (create if needed)
+mkdir -p "$HOME/Desktop"
+cp "$DESKTOP_FILE" "$HOME/Desktop/gnome-mail.desktop"
+chmod +x "$HOME/Desktop/gnome-mail.desktop"
+echo "Shortcut added to your Desktop!"
 
 echo "Gnome Mail installed to your application menu!"
 echo "You can find it by searching 'Gnome Mail' in your app launcher."
