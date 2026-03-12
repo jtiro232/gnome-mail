@@ -14,13 +14,14 @@ from gnome_mail import constants
 class ComposeScreen:
     """Modal compose overlay. Captures all events when open."""
 
-    PANEL_W = 600
-    PANEL_H = 500
+    PANEL_W = 640
+    PANEL_H = 520
 
     def __init__(self, toast_manager):
         self.toast_manager = toast_manager
         self.visible = False
         self._models = []
+        self._model_display = []  # "GnomeName (model)" display strings
         self._result = None  # Set when send succeeds, read by app
 
         # Widgets created on open()
@@ -58,7 +59,7 @@ class ComposeScreen:
         y += 64
 
         # Text area
-        ta_h = self.PANEL_H - 200
+        ta_h = self.PANEL_H - 220
         self.text_area = TextArea(
             (inner_x, y, inner_w, ta_h),
             placeholder=constants.COMPOSE_PLACEHOLDER,
@@ -67,16 +68,20 @@ class ComposeScreen:
         self.text_area.focused = True
         y += ta_h + 12
 
-        # Buttons
-        btn_w = 180
+        # Buttons — send button auto-sized to text
         btn_h = 36
+        cancel_w = 120
         self.cancel_btn = Button(
-            (inner_x, y, btn_w, btn_h),
+            (inner_x, y, cancel_w, btn_h),
             constants.CANCEL_BUTTON,
             callback=self._cancel,
         )
+        # Measure send text to auto-size button
+        send_font = get_font("body")
+        send_text_w = send_font.size(constants.SEND_BUTTON)[0]
+        send_btn_w = max(200, send_text_w + 32)
         self.send_btn = Button(
-            (inner_x + inner_w - btn_w - 20, y, btn_w + 20, btn_h),
+            (inner_x + inner_w - send_btn_w, y, send_btn_w, btn_h),
             constants.SEND_BUTTON,
             callback=self._send,
         )
@@ -94,10 +99,16 @@ class ComposeScreen:
             self._models = []
 
         if self._models:
-            self.dropdown.options = self._models
+            # Build display names with gnome names
+            self._model_display = [
+                f"{constants.get_gnome_name(m)} ({m})" for m in self._models
+            ]
+            self.dropdown.options = self._model_display
             self.dropdown.selected = 0
         else:
-            self.dropdown.options = [constants.OLLAMA_UNAVAILABLE]
+            self._model_display = [constants.OLLAMA_UNAVAILABLE]
+            self._models = []
+            self.dropdown.options = self._model_display
             self.dropdown.selected = 0
             self.toast_manager.show(constants.TOAST_ERROR_TEMPLATE.format("Ollama"))
 
@@ -110,10 +121,12 @@ class ComposeScreen:
             self.toast_manager.show(constants.EMPTY_MESSAGE_WARNING)
             return
 
-        model = self.dropdown.get_selected()
-        if not model or model == constants.OLLAMA_UNAVAILABLE:
+        # Map display name back to real model name
+        sel_idx = self.dropdown.selected
+        if not self._models or sel_idx >= len(self._models):
             self.toast_manager.show(constants.TOAST_ERROR_TEMPLATE.format("Ollama"))
             return
+        model = self._models[sel_idx]
 
         conversation_id = str(uuid.uuid4())
         subject = message[:60]

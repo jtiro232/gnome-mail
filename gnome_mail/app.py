@@ -15,7 +15,9 @@ from gnome_mail.ui.widgets import Button, ToastManager
 from gnome_mail.ui.inbox_panel import InboxPanel
 from gnome_mail.ui.message_panel import MessagePanel
 from gnome_mail.ui.compose_screen import ComposeScreen
-from gnome_mail.gnome_art import draw_mushroom_house, draw_tiny_mushroom
+from gnome_mail.gnome_art import (
+    draw_mushroom_house, draw_tiny_mushroom, draw_header_decoration,
+)
 from gnome_mail import constants, db, ollama_worker
 
 
@@ -45,8 +47,16 @@ class GnomeMailApp:
         self._calc_layout()
 
         # Panels
-        self.inbox_panel = InboxPanel(self._inbox_rect, on_select=self._on_select_conversation)
-        self.message_panel = MessagePanel(self._message_rect)
+        self.inbox_panel = InboxPanel(
+            self._inbox_rect,
+            on_select=self._on_select_conversation,
+            on_delete=self._on_delete_conversation,
+        )
+        self.message_panel = MessagePanel(
+            self._message_rect,
+            on_delete=self._on_delete_conversation,
+            on_resend=self._on_resend_conversation,
+        )
         self.compose_screen = ComposeScreen(self.toast_manager)
 
         # Header button
@@ -78,6 +88,33 @@ class GnomeMailApp:
         self.message_panel.load_conversation(conversation_id)
         self.dirty = True
 
+    def _on_delete_conversation(self, conversation_id):
+        """Delete a conversation and refresh the UI."""
+        db.delete_conversation(conversation_id)
+        self.toast_manager.show(constants.DELETE_CONFIRM)
+        # If we deleted the currently viewed conversation, clear the panel
+        if self.message_panel.current_id == conversation_id:
+            self.message_panel.clear()
+        # Clear selection if it was the deleted one
+        if self.inbox_panel.selected_id == conversation_id:
+            self.inbox_panel.selected_id = None
+        self.inbox_panel.refresh()
+        self.dirty = True
+
+    def _on_resend_conversation(self, conversation_id):
+        """Resend a failed conversation."""
+        conv = db.get_conversation(conversation_id)
+        if not conv:
+            return
+        db.reset_to_pending(conversation_id)
+        ollama_worker.send_message(
+            conversation_id, conv["model"], conv["user_message"], self.result_queue
+        )
+        self.toast_manager.show(constants.RESEND_TOAST)
+        self.inbox_panel.refresh()
+        self.message_panel.reload_current()
+        self.dirty = True
+
     def _process_results(self):
         """Check for completed Ollama responses."""
         while not self.result_queue.empty():
@@ -89,15 +126,17 @@ class GnomeMailApp:
             cid = result["conversation_id"]
             if result["success"]:
                 db.update_response(cid, result["response_text"])
-                # Find model name for toast
+                # Find model name for toast — use gnome name
                 conv = db.get_conversation(cid)
                 model = conv["model"] if conv else "unknown"
-                self.toast_manager.show(constants.TOAST_RECEIVED_TEMPLATE.format(model))
+                gnome_name = constants.get_gnome_name(model)
+                self.toast_manager.show(constants.TOAST_RECEIVED_TEMPLATE.format(gnome_name))
             else:
                 db.update_error(cid, result["error_text"])
                 conv = db.get_conversation(cid)
                 model = conv["model"] if conv else "unknown"
-                self.toast_manager.show(constants.TOAST_ERROR_TEMPLATE.format(model))
+                gnome_name = constants.get_gnome_name(model)
+                self.toast_manager.show(constants.TOAST_ERROR_TEMPLATE.format(gnome_name))
 
             # Refresh inbox
             self.inbox_panel.refresh()
@@ -205,6 +244,9 @@ class GnomeMailApp:
 
         # Header bar
         pygame.draw.rect(self.screen, BG_COLOR, (0, 0, w, HEADER_HEIGHT))
+
+        # Header decoration (vines and tiny mushrooms along bottom of header)
+        draw_header_decoration(self.screen, 0, HEADER_HEIGHT - 2, w)
 
         # Mushroom house + title
         draw_mushroom_house(self.screen, 28, 6, 0.5)

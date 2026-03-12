@@ -95,3 +95,21 @@ def get_total_count():
     count = conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
     conn.close()
     return count
+
+
+def delete_conversation(id):
+    conn = _connect()
+    conn.execute("DELETE FROM conversations WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+
+
+def reset_to_pending(id):
+    """Reset a failed/error conversation back to pending for resend."""
+    conn = _connect()
+    conn.execute(
+        "UPDATE conversations SET status = 'pending', error_text = NULL WHERE id = ?",
+        (id,),
+    )
+    conn.commit()
+    conn.close()

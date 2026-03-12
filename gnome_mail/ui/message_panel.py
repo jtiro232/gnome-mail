@@ -4,24 +4,76 @@ import pygame
 
 from gnome_mail.ui.theme import (
     PANEL_BG, TEXT_COLOR, TEXT_DIM, ACCENT_LIGHT, GREEN_ACCENT,
-    ERROR_COLOR, DIVIDER, PADDING, get_font,
+    ERROR_COLOR, DIVIDER, PADDING, BUTTON_BG, BUTTON_HOVER, BUTTON_TEXT,
+    get_font,
 )
-from gnome_mail.ui.widgets import word_wrap_text
+from gnome_mail.ui.widgets import word_wrap_text, Button
 from gnome_mail.gnome_art import draw_gnome, draw_tiny_mushroom
 from gnome_mail import constants, db
 
 
 class MessagePanel:
-    def __init__(self, rect):
+    def __init__(self, rect, on_delete=None, on_resend=None):
         self.rect = pygame.Rect(rect)
         self.current_conversation = None
         self.current_id = None
         self.scroll_offset = 0
         self._content_height = 0
         self._dirty = True
+        self.on_delete = on_delete
+        self.on_resend = on_resend
+
+        # Action buttons (created lazily based on state)
+        self._delete_btn = None
+        self._resend_btn = None
+        self._update_buttons()
+
+    def _update_buttons(self):
+        """Recreate action buttons based on current conversation state."""
+        if not self.current_conversation:
+            self._delete_btn = None
+            self._resend_btn = None
+            return
+
+        btn_y = self.rect.y + PADDING
+        btn_x = self.rect.right - PADDING
+
+        # Delete button — always available
+        del_font = get_font("small")
+        del_w = del_font.size(constants.DELETE_BUTTON)[0] + 24
+        del_h = 28
+        self._delete_btn = Button(
+            (btn_x - del_w, btn_y, del_w, del_h),
+            constants.DELETE_BUTTON,
+            callback=self._do_delete,
+            font_key="small",
+        )
+
+        # Resend button — only for error state
+        if self.current_conversation["status"] == "error":
+            resend_font = get_font("small")
+            resend_w = resend_font.size(constants.RESEND_BUTTON)[0] + 24
+            resend_h = 28
+            self._resend_btn = Button(
+                (btn_x - del_w - resend_w - 8, btn_y, resend_w, resend_h),
+                constants.RESEND_BUTTON,
+                callback=self._do_resend,
+                font_key="small",
+            )
+        else:
+            self._resend_btn = None
+
+    def _do_delete(self):
+        if self.on_delete and self.current_id:
+            self.on_delete(self.current_id)
+
+    def _do_resend(self):
+        if self.on_resend and self.current_id:
+            self.on_resend(self.current_id)
 
     def update_rect(self, rect):
         self.rect = pygame.Rect(rect)
+        self._update_buttons()
         self._dirty = True
 
     def load_conversation(self, conversation_id):
@@ -30,18 +82,21 @@ class MessagePanel:
         self.current_id = conversation_id
         self.current_conversation = db.get_conversation(conversation_id)
         self.scroll_offset = 0
+        self._update_buttons()
         self._dirty = True
 
     def reload_current(self):
         """Reload current conversation (e.g. after response arrives)."""
         if self.current_id:
             self.current_conversation = db.get_conversation(self.current_id)
+            self._update_buttons()
             self._dirty = True
 
     def clear(self):
         self.current_conversation = None
         self.current_id = None
         self.scroll_offset = 0
+        self._update_buttons()
         self._dirty = True
 
     def handle_event(self, event):
@@ -50,6 +105,17 @@ class MessagePanel:
             self.scroll_offset = max(0, min(max_scroll, self.scroll_offset - event.y * 30))
             self._dirty = True
             return True
+
+        # Route to action buttons
+        if self._delete_btn:
+            if self._delete_btn.handle_event(event):
+                self._dirty = True
+                return True
+        if self._resend_btn:
+            if self._resend_btn.handle_event(event):
+                self._dirty = True
+                return True
+
         return False
 
     def draw(self, surface):
@@ -79,7 +145,9 @@ class MessagePanel:
         font_body = get_font("body")
         font_small = get_font("small")
 
-        header_text = conv["model"]
+        # Show gnome name + model
+        gnome_name = constants.get_gnome_name(conv["model"])
+        header_text = f"{gnome_name} ({conv['model']})"
         header_surf = font_title.render(header_text, True, ACCENT_LIGHT)
         surface.blit(header_surf, (content_x, y))
         draw_tiny_mushroom(surface, content_x + header_surf.get_width() + 10, y + 8)
@@ -109,8 +177,8 @@ class MessagePanel:
 
         status = conv["status"]
         if status == "complete" and conv.get("assistant_response"):
-            # Response label
-            resp_label = constants.RESPONSE_LABEL_TEMPLATE.format(conv["model"])
+            # Response label with gnome name
+            resp_label = constants.RESPONSE_LABEL_TEMPLATE.format(gnome_name)
             resp_label_surf = font_small.render(resp_label, True, GREEN_ACCENT)
             surface.blit(resp_label_surf, (content_x, y))
             y += resp_label_surf.get_height() + 6
@@ -138,6 +206,12 @@ class MessagePanel:
             gnome_y = y + 20
             draw_gnome(surface, gnome_x, gnome_y, 1.2, "sad")
             y += 80
+
+            # Error detail header
+            detail_surf = font_small.render(constants.ERROR_DETAIL, True, ERROR_COLOR)
+            surface.blit(detail_surf, (content_x, y))
+            y += detail_surf.get_height() + 6
+
             error_text = conv.get("error_text", "Unknown error")
             error_lines = word_wrap_text(error_text, font_body, content_w)
             for line in error_lines:
@@ -158,4 +232,11 @@ class MessagePanel:
             pygame.draw.rect(surface, DIVIDER, (bar_x, bar_y, 4, bar_h), border_radius=2)
 
         surface.set_clip(old_clip)
+
+        # Draw action buttons ON TOP of clip area (so they're always visible)
+        if self._delete_btn:
+            self._delete_btn.draw(surface)
+        if self._resend_btn:
+            self._resend_btn.draw(surface)
+
         self._dirty = False

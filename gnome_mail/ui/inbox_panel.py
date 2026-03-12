@@ -8,14 +8,29 @@ from gnome_mail.ui.theme import (
     INBOX_ITEM_HEIGHT, PADDING, get_font,
 )
 from gnome_mail.ui.widgets import ScrollableList, Button
-from gnome_mail.gnome_art import draw_gnome_mail_carrier, draw_tiny_mushroom
+from gnome_mail.gnome_art import (
+    draw_gnome_mail_carrier, draw_tiny_mushroom, draw_sidebar_forest_footer,
+)
 from gnome_mail import constants, db
 
 
+def _truncate_to_width(text, font, max_width):
+    """Truncate text with ellipsis to fit within max_width pixels."""
+    if font.size(text)[0] <= max_width:
+        return text
+    ellipsis = "..."
+    ew = font.size(ellipsis)[0]
+    for i in range(len(text), 0, -1):
+        if font.size(text[:i])[0] + ew <= max_width:
+            return text[:i] + ellipsis
+    return ellipsis
+
+
 class InboxPanel:
-    def __init__(self, rect, on_select=None):
+    def __init__(self, rect, on_select=None, on_delete=None):
         self.rect = pygame.Rect(rect)
         self.on_select = on_select
+        self.on_delete = on_delete
         self.conversations = []
         self.selected_id = None
         self.total_count = 0
@@ -40,6 +55,9 @@ class InboxPanel:
             font_key="small",
         )
         self.load_more_btn.visible = False
+
+        # Track delete button hover per item
+        self._delete_hovered_index = -1
 
     def update_rect(self, rect):
         self.rect = pygame.Rect(rect)
@@ -86,12 +104,55 @@ class InboxPanel:
             self.rect.x, self.rect.y + header_h, self.rect.width, list_h
         )
 
+    def _get_delete_rect(self, item_rect):
+        """Return the rect for the delete (X) button on an inbox item."""
+        bw, bh = 20, 20
+        return pygame.Rect(
+            item_rect.right - bw - 8,
+            item_rect.y + (item_rect.height - bh) // 2,
+            bw, bh,
+        )
+
     def handle_event(self, event):
         dirty = False
         old_selected = self.scroll_list.selected_index
 
         if self.load_more_btn.visible:
             dirty |= self.load_more_btn.handle_event(event)
+
+        # Check for delete button clicks before scroll list
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.rect.collidepoint(event.pos):
+                # Check if click is on a delete button
+                for i, item in enumerate(self.conversations):
+                    iy = self.scroll_list.rect.y + i * INBOX_ITEM_HEIGHT - self.scroll_list.scroll_offset
+                    if iy + INBOX_ITEM_HEIGHT < self.scroll_list.rect.y or iy > self.scroll_list.rect.bottom:
+                        continue
+                    item_rect = pygame.Rect(self.scroll_list.rect.x, iy,
+                                            self.scroll_list.rect.width - 8, INBOX_ITEM_HEIGHT)
+                    del_rect = self._get_delete_rect(item_rect)
+                    if del_rect.collidepoint(event.pos):
+                        if self.on_delete:
+                            self.on_delete(item["id"])
+                        return True
+
+        # Track hover over delete buttons
+        if event.type == pygame.MOUSEMOTION:
+            old_del_hover = self._delete_hovered_index
+            self._delete_hovered_index = -1
+            if self.rect.collidepoint(event.pos):
+                for i in range(len(self.conversations)):
+                    iy = self.scroll_list.rect.y + i * INBOX_ITEM_HEIGHT - self.scroll_list.scroll_offset
+                    if iy + INBOX_ITEM_HEIGHT < self.scroll_list.rect.y or iy > self.scroll_list.rect.bottom:
+                        continue
+                    item_rect = pygame.Rect(self.scroll_list.rect.x, iy,
+                                            self.scroll_list.rect.width - 8, INBOX_ITEM_HEIGHT)
+                    del_rect = self._get_delete_rect(item_rect)
+                    if del_rect.collidepoint(event.pos):
+                        self._delete_hovered_index = i
+                        break
+            if self._delete_hovered_index != old_del_hover:
+                dirty = True
 
         dirty |= self.scroll_list.handle_event(event)
 
@@ -116,18 +177,20 @@ class InboxPanel:
 
         x = rect.x + PADDING
         y = rect.y + 8
+        max_text_w = rect.width - PADDING * 2 - 30  # Reserve space for delete btn
 
-        # Tiny mushroom + model name
+        # Tiny mushroom + model gnome name
         draw_tiny_mushroom(surface, x + 6, y + 6)
         font_small = get_font("small")
-        model_surf = font_small.render(item["model"], True, ACCENT_LIGHT)
+        gnome_name = constants.get_gnome_name(item["model"])
+        display_model = f"{gnome_name} ({item['model']})"
+        display_model = _truncate_to_width(display_model, font_small, max_text_w - 20)
+        model_surf = font_small.render(display_model, True, ACCENT_LIGHT)
         surface.blit(model_surf, (x + 18, y))
 
-        # Subject
+        # Subject — truncate by pixel width
         font_body = get_font("body")
-        subject = item["subject"]
-        if len(subject) > 45:
-            subject = subject[:42] + "..."
+        subject = _truncate_to_width(item["subject"], font_body, max_text_w)
         subject_surf = font_body.render(subject, True, TEXT_COLOR)
         surface.blit(subject_surf, (x, y + 18))
 
@@ -143,8 +206,27 @@ class InboxPanel:
             sub_text = ""
             sub_color = TEXT_DIM
         if sub_text:
+            sub_text = _truncate_to_width(sub_text, font_small, max_text_w)
             sub_surf = font_small.render(sub_text, True, sub_color)
             surface.blit(sub_surf, (x, y + 38))
+
+        # Delete button (X) — show on hover or selected
+        if selected or hovered:
+            del_rect = self._get_delete_rect(rect)
+            idx = None
+            for i, c in enumerate(self.conversations):
+                if c["id"] == item["id"]:
+                    idx = i
+                    break
+            del_hovered = (idx == self._delete_hovered_index)
+            btn_color = ERROR_COLOR if del_hovered else TEXT_DIM
+            pygame.draw.rect(surface, btn_color, del_rect, 1, border_radius=3)
+            font_x = get_font("small")
+            x_surf = font_x.render("X", True, btn_color)
+            surface.blit(x_surf, (
+                del_rect.x + (del_rect.width - x_surf.get_width()) // 2,
+                del_rect.y + (del_rect.height - x_surf.get_height()) // 2,
+            ))
 
         # Bottom divider
         pygame.draw.line(surface, DIVIDER, (rect.x + 8, rect.bottom - 1), (rect.right - 8, rect.bottom - 1))
@@ -174,5 +256,10 @@ class InboxPanel:
             self.scroll_list.draw(surface)
             if self.load_more_btn.visible:
                 self.load_more_btn.draw(surface)
+
+        # Forest footer at very bottom
+        footer_h = 40
+        footer_rect = (self.rect.x, self.rect.bottom - footer_h, self.rect.width, footer_h)
+        draw_sidebar_forest_footer(surface, footer_rect)
 
         self._dirty = False

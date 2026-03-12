@@ -20,10 +20,69 @@ COMPOSE_PLACEHOLDER = "Write your message to the woodland oracle..."
 NEW_SCROLL_BUTTON = "New Scroll"
 CANCEL_BUTTON = "Cancel"
 OLLAMA_UNAVAILABLE = "Ollama unavailable"
+DELETE_BUTTON = "Burn Scroll"
+DELETE_CONFIRM = "The scroll has been cast into the fire!"
+RESEND_BUTTON = "Resend by Owl Post"
+RESEND_TOAST = "A fresh gnome has been dispatched with your scroll!"
+ERROR_DETAIL = "Alas! The gnome stumbled and dropped your scroll!"
 
 DB_DIR = "gnome-mail"
 DB_NAME = "messages.db"
 INBOX_PAGE_SIZE = 20
+
+# Gnome names for Ollama models — each model gets a woodland persona
+GNOME_NAMES = {
+    "llama3": "Bramblethorne",
+    "llama3.1": "Bramblethorne the Elder",
+    "llama3.2": "Bramblethorne the Wise",
+    "llama3.3": "Bramblethorne III",
+    "llama2": "Old Rootbeard",
+    "mistral": "Mistwick Fogweaver",
+    "mixtral": "The Mycelium Council",
+    "codellama": "Rune Scrollkeeper",
+    "gemma": "Gemstone Glintcap",
+    "gemma2": "Gemstone Glintcap II",
+    "phi3": "Philbert Toadstool",
+    "phi": "Little Philbert",
+    "qwen": "Qwenwick Hollow",
+    "qwen2": "Qwenwick the Younger",
+    "qwen2.5": "Qwenwick Oakenshield",
+    "deepseek-r1": "Deepdelve the Miner",
+    "deepseek-coder": "Deepdelve Runesmith",
+    "command-r": "Captain Acornbeard",
+    "command-r-plus": "Admiral Acornbeard",
+    "wizard-math": "Fibonacci Mosscap",
+    "neural-chat": "Neuralynx the Whisper",
+    "dolphin-mistral": "Delphin of the Pond",
+    "stablelm2": "Steadyoak Stumpsworth",
+    "orca-mini": "Little Orca of the Brook",
+    "vicuna": "Vincenzo Vineroot",
+    "tinyllama": "Tiny Bramble",
+    "openchat": "Oakenmouth the Chatty",
+    "solar": "Solarius Sundew",
+    "nous-hermes2": "Hermes Swift Courier",
+    "yi": "Yi the Eastern Sage",
+    "falcon": "Falconrest Treewatcher",
+}
+
+# Default gnome names for unknown models
+DEFAULT_GNOME_NAMES = [
+    "Thistlewick", "Mosscap", "Fernwhisper", "Acornbottom", "Dewdrop",
+    "Rootknuckle", "Pebbleskip", "Twigsnap", "Barkheart", "Cloverfoot",
+    "Mushroomcap", "Lichentooth", "Pinecone Pete", "Stumpy Oaksworth",
+    "Willowbark", "Puddle Jumper", "Dustymoss", "Cobblestone Carl",
+]
+
+
+def get_gnome_name(model_name):
+    """Return a gnome name for a given Ollama model name."""
+    if model_name in GNOME_NAMES:
+        return GNOME_NAMES[model_name]
+    base = model_name.split(":")[0] if ":" in model_name else model_name
+    if base in GNOME_NAMES:
+        return GNOME_NAMES[base]
+    idx = hash(model_name) % len(DEFAULT_GNOME_NAMES)
+    return DEFAULT_GNOME_NAMES[idx]
 
 RANDOM_GNOME_FACTS = [
     "Did you know? Gnomes can communicate through mycelium networks.",
