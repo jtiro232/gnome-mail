@@ -11,7 +11,7 @@ cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=Gnome Mail
 Comment=Toadstool-powered messaging via Ollama
-Exec=python3 ${INSTALL_DIR}/run.py
+Exec=bash ${INSTALL_DIR}/launch.sh
 Path=${INSTALL_DIR}
 Terminal=false
 Type=Application

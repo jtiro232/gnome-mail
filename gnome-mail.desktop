@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Gnome Mail
 Comment=Toadstool-powered messaging via Ollama
-Exec=python3 /home/user/gnome-mail/run.py
+Exec=bash /home/user/gnome-mail/launch.sh
 Path=/home/user/gnome-mail
 Terminal=false
 Type=Application
