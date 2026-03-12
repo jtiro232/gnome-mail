@@ -18,7 +18,7 @@ from gnome_mail.ui.compose_screen import ComposeScreen
 from gnome_mail.gnome_art import (
     draw_mushroom_house, draw_tiny_mushroom, draw_header_decoration,
 )
-from gnome_mail import constants, db, ollama_worker
+from gnome_mail import constants, db, ollama_worker, crash_report
 
 
 class GnomeMailApp:
@@ -107,8 +107,10 @@ class GnomeMailApp:
         if not conv:
             return
         db.reset_to_pending(conversation_id)
+        gnome_name = constants.get_gnome_name(conv["model"])
         ollama_worker.send_message(
-            conversation_id, conv["model"], conv["user_message"], self.result_queue
+            conversation_id, conv["model"], conv["user_message"], self.result_queue,
+            gnome_name=gnome_name,
         )
         self.toast_manager.show(constants.RESEND_TOAST)
         self.inbox_panel.refresh()
@@ -190,7 +192,8 @@ class GnomeMailApp:
                     result = self.compose_screen.get_result()
                     if result:
                         db.save_conversation(result["id"], result["model"], result["subject"], result["user_message"])
-                        ollama_worker.send_message(result["id"], result["model"], result["user_message"], self.result_queue)
+                        gnome_name = constants.get_gnome_name(result["model"])
+                        ollama_worker.send_message(result["id"], result["model"], result["user_message"], self.result_queue, gnome_name=gnome_name)
                         self.inbox_panel.refresh()
                         self.inbox_panel.selected_id = result["id"]
                         self.inbox_panel.scroll_list.selected_index = 0
