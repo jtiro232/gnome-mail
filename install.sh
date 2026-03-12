@@ -4,6 +4,10 @@
 
 INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
 DESKTOP_FILE="$HOME/.local/share/applications/gnome-mail.desktop"
+PYTHON="$(which python3)"
+
+# Install dependencies if needed
+"$PYTHON" -c "import pygame" 2>/dev/null || "$PYTHON" -m pip install -r "${INSTALL_DIR}/requirements.txt"
 
 mkdir -p "$HOME/.local/share/applications"
 
@@ -11,7 +15,7 @@ cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=Gnome Mail
 Comment=Toadstool-powered messaging via Ollama
-Exec=python3 ${INSTALL_DIR}/run.py
+Exec=${PYTHON} ${INSTALL_DIR}/run.py
 Path=${INSTALL_DIR}
 Terminal=false
 Type=Application
