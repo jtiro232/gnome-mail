@@ -76,6 +76,9 @@ class GnomeMailApp:
         )
         self._update_header_btn()
 
+        # Recover orphaned pending conversations from previous sessions
+        self._recover_orphaned_pending()
+
         # Load inbox
         self.inbox_panel.refresh()
 
@@ -89,6 +92,19 @@ class GnomeMailApp:
     def _update_header_btn(self):
         w = self.screen.get_width()
         self.new_scroll_btn.rect = pygame.Rect(w - 136, 8, 128, 32)
+
+    def _recover_orphaned_pending(self):
+        """Mark any conversations stuck as 'pending' from a previous session as error,
+        so the user can resend them via Owl Post."""
+        orphans = db.get_orphaned_pending()
+        if orphans:
+            db.mark_orphaned_as_error()
+            count = len(orphans)
+            if count == 1:
+                gnome_name = constants.get_gnome_name(orphans[0]["model"])
+                self.toast_manager.show(f"{gnome_name} got lost! Use Resend by Owl Post to try again.")
+            else:
+                self.toast_manager.show(f"{count} gnomes got lost! Use Resend by Owl Post to try again.")
 
     def _open_compose(self):
         self.compose_screen.open(self.screen.get_size())

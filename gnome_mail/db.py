@@ -121,6 +121,26 @@ def reset_to_pending(id):
     conn.close()
 
 
+def get_orphaned_pending():
+    """Return conversations stuck in 'pending' status (orphaned from a previous session)."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT id, model, user_message FROM conversations WHERE status = 'pending'"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def mark_orphaned_as_error():
+    """Mark all pending conversations as error so they can be resent."""
+    conn = _connect()
+    conn.execute(
+        "UPDATE conversations SET status = 'error', error_text = 'The gnome was lost when the app closed. Use Resend by Owl Post to try again.' WHERE status = 'pending'"
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_all_gnome_names():
     """Return dict of {model: gnome_name} from the gnome_names table."""
     conn = _connect()
