@@ -76,16 +76,28 @@ DEFAULT_GNOME_NAMES = [
 
 # Runtime cache of model -> assigned gnome name (populated at startup)
 _assigned_names = {}
+_base_name_index = {}  # base model name -> gnome name (for tag-variant matching)
 
 
 def _load_assigned_names():
-    """Load custom gnome names from the database into the runtime cache."""
-    global _assigned_names
+    """Load custom gnome names from the database into the runtime cache.
+
+    Also builds a base-name index so models with different tags
+    (e.g. phi3:latest vs phi3:3.8b) share the same saved name.
+    """
+    global _assigned_names, _base_name_index
     try:
         from gnome_mail import db
         _assigned_names = db.get_all_gnome_names()
     except Exception:
         _assigned_names = {}
+    # Build base name -> gnome name index from saved assignments
+    _base_name_index = {}
+    for model_key, gnome_name in _assigned_names.items():
+        base = model_key.split(":")[0] if ":" in model_key else model_key
+        # First saved entry for a base name wins (preserves custom renames)
+        if base not in _base_name_index:
+            _base_name_index[base] = gnome_name
 
 
 def get_gnome_name(model_name):
@@ -94,19 +106,17 @@ def get_gnome_name(model_name):
     Names are persisted in the DB so models keep the same name across restarts.
     Also matches on base name (without :tag) so 'phi3:latest' reuses 'phi3's name.
     """
-    # Direct match
+    # Direct match (includes custom renames loaded from DB)
     if model_name in _assigned_names:
         return _assigned_names[model_name]
 
-    # Check if the base name (without :tag) already has an assignment
+    # Check if the base name (without :tag) already has a saved name
     base = model_name.split(":")[0] if ":" in model_name else model_name
-    for existing_model, existing_name in _assigned_names.items():
-        existing_base = existing_model.split(":")[0] if ":" in existing_model else existing_model
-        if existing_base == base:
-            # Reuse the same name and save the alias
-            _assigned_names[model_name] = existing_name
-            _save_name(model_name, existing_name)
-            return existing_name
+    if base in _base_name_index:
+        name = _base_name_index[base]
+        _assigned_names[model_name] = name
+        _save_name(model_name, name)
+        return name
 
     # Try the explicit mapping first
     candidate = GNOME_NAMES.get(model_name) or GNOME_NAMES.get(base)
@@ -137,9 +147,22 @@ def get_gnome_name(model_name):
 
 
 def set_custom_gnome_name(model_name, new_name):
-    """Set a custom gnome name for a model, updating both cache and DB."""
+    """Set a custom gnome name for a model, updating both cache and DB.
+
+    Also updates the base-name index so all tag variants of this model
+    will use the new custom name.
+    """
     _assigned_names[model_name] = new_name
     _save_name(model_name, new_name)
+    # Update base name index so tag variants pick up the rename
+    base = model_name.split(":")[0] if ":" in model_name else model_name
+    _base_name_index[base] = new_name
+    # Also update any other tag variants already in the cache
+    for key in list(_assigned_names.keys()):
+        key_base = key.split(":")[0] if ":" in key else key
+        if key_base == base and key != model_name:
+            _assigned_names[key] = new_name
+            _save_name(key, new_name)
 
 
 def _save_name(model_name, gnome_name):
