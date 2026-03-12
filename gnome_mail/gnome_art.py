@@ -865,13 +865,78 @@ def draw_sidebar_forest_footer(surface, rect):
     draw_flower(surface, x + int(w * 0.65), y + 6, 0.3, (200, 140, 180))
 
 
-def draw_header_decoration(surface, x, y, w):
-    """Draw decorative elements for the header bar."""
-    # Subtle vine/leaves along the bottom
+def draw_gnome_with_wrench(surface, x, y, scale=1.0):
+    """Draw a small gnome holding a wrench — used for the settings button."""
+    s = scale
+    hat_color = (100, 60, 40)  # brown work hat
+    tunic_color = (80, 70, 120)
+    _base_gnome(surface, x, y, s, hat_color, tunic_color)
+
+    arm_color = tunic_color
+    # Right arm holding wrench
+    wx = x + int(14 * s)
+    wy = y + int(8 * s)
+    pygame.draw.line(surface, arm_color,
+                     (x + int(12 * s), y + int(12 * s)),
+                     (wx, wy), max(1, int(3 * s)))
+    pygame.draw.circle(surface, GNOME_SKIN, (wx, wy), max(1, int(3 * s)))
+
+    # Wrench
+    wrench_color = (160, 165, 170)
+    wrench_dark = (120, 125, 130)
+    # Handle
+    pygame.draw.line(surface, wrench_color,
+                     (wx + int(2 * s), wy - int(2 * s)),
+                     (wx + int(12 * s), wy - int(12 * s)), max(1, int(2 * s)))
+    # Head of wrench (open-end shape)
+    head_x = wx + int(12 * s)
+    head_y = wy - int(12 * s)
+    pygame.draw.circle(surface, wrench_color, (head_x, head_y), max(2, int(4 * s)))
+    pygame.draw.circle(surface, wrench_dark, (head_x, head_y), max(1, int(2 * s)))
+
+    # Left arm at side
+    pygame.draw.line(surface, arm_color,
+                     (x - int(12 * s), y + int(12 * s)),
+                     (x - int(18 * s), y + int(22 * s)), max(1, int(3 * s)))
+
+
+def draw_mini_gnome_head(surface, x, y, scale=0.4, model_name=""):
+    """Draw a tiny gnome head (hat + face) as an avatar. Color varies by model name hash."""
+    s = scale
+    hat_idx = hash(model_name) % len(HAT_COLORS)
+    hat_color = HAT_COLORS[hat_idx]
+
+    # Face
+    pygame.draw.circle(surface, GNOME_SKIN, (x, y), max(2, int(8 * s)))
+    # Eyes
+    pygame.draw.circle(surface, (40, 35, 30), (x - int(3 * s), y - int(1 * s)), max(1, int(1.5 * s)))
+    pygame.draw.circle(surface, (40, 35, 30), (x + int(3 * s), y - int(1 * s)), max(1, int(1.5 * s)))
+    # Nose
+    pygame.draw.circle(surface, (195, 155, 120), (x, y + int(2 * s)), max(1, int(2 * s)))
+    # Beard
+    pygame.draw.ellipse(surface, (240, 235, 225),
+                        (x - int(5 * s), y + int(2 * s), int(10 * s), int(8 * s)))
+    # Hat
+    hat_points = [
+        (x, y - int(18 * s)),
+        (x - int(9 * s), y - int(3 * s)),
+        (x + int(9 * s), y - int(3 * s)),
+    ]
+    pygame.draw.polygon(surface, hat_color, hat_points)
+    # Brim
+    pygame.draw.ellipse(surface, tuple(max(0, c - 15) for c in hat_color),
+                        (x - int(10 * s), y - int(5 * s), int(20 * s), int(5 * s)))
+
+
+def draw_header_decoration(surface, x, y, w, stop_x=None):
+    """Draw decorative elements for the header bar.
+    stop_x: stop drawing before this x coordinate to avoid clipping buttons."""
     vine_color = (50, 75, 42)
+    max_x = (stop_x - 30) if stop_x else w
     for i in range(0, w, 40):
         vx = x + i
-        # Small leaf
+        if vx > max_x:
+            break
         pygame.draw.ellipse(surface, vine_color, (vx, y - 3, 8, 4))
-        if i % 80 == 0:
+        if i % 80 == 0 and vx + 20 <= max_x:
             draw_tiny_mushroom(surface, vx + 20, y - 4)

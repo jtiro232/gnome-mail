@@ -74,15 +74,72 @@ DEFAULT_GNOME_NAMES = [
 ]
 
 
+# Runtime cache of model -> assigned gnome name (populated at startup)
+_assigned_names = {}
+
+
+def _load_assigned_names():
+    """Load custom gnome names from the database into the runtime cache."""
+    global _assigned_names
+    try:
+        from gnome_mail import db
+        _assigned_names = db.get_all_gnome_names()
+    except Exception:
+        _assigned_names = {}
+
+
 def get_gnome_name(model_name):
-    """Return a gnome name for a given Ollama model name."""
-    if model_name in GNOME_NAMES:
-        return GNOME_NAMES[model_name]
+    """Return a unique gnome name for a given Ollama model name."""
+    if model_name in _assigned_names:
+        return _assigned_names[model_name]
+
+    # Try the explicit mapping first
     base = model_name.split(":")[0] if ":" in model_name else model_name
-    if base in GNOME_NAMES:
-        return GNOME_NAMES[base]
-    idx = hash(model_name) % len(DEFAULT_GNOME_NAMES)
-    return DEFAULT_GNOME_NAMES[idx]
+    candidate = GNOME_NAMES.get(model_name) or GNOME_NAMES.get(base)
+
+    used = set(_assigned_names.values())
+
+    if candidate and candidate not in used:
+        _assigned_names[model_name] = candidate
+        _save_name(model_name, candidate)
+        return candidate
+
+    # Pick from default names, avoiding duplicates
+    for name in DEFAULT_GNOME_NAMES:
+        if name not in used:
+            _assigned_names[model_name] = name
+            _save_name(model_name, name)
+            return name
+
+    # All defaults exhausted — generate a numbered name
+    i = 1
+    while True:
+        name = f"Gnome #{i}"
+        if name not in used:
+            _assigned_names[model_name] = name
+            _save_name(model_name, name)
+            return name
+        i += 1
+
+
+def set_custom_gnome_name(model_name, new_name):
+    """Set a custom gnome name for a model, updating both cache and DB."""
+    _assigned_names[model_name] = new_name
+    _save_name(model_name, new_name)
+
+
+def _save_name(model_name, gnome_name):
+    """Persist a gnome name assignment to the database."""
+    try:
+        from gnome_mail import db
+        db.set_gnome_name(model_name, gnome_name)
+    except Exception:
+        pass
+
+
+def get_all_assigned_names():
+    """Return the current model -> gnome name mapping."""
+    return dict(_assigned_names)
 
 RANDOM_GNOME_FACTS = [
     "Did you know? Gnomes can communicate through mycelium networks.",

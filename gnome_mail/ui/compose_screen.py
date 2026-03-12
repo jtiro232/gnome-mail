@@ -7,7 +7,7 @@ from gnome_mail.ui.theme import (
     PANEL_BG, TEXT_COLOR, TEXT_DIM, ACCENT_LIGHT, PADDING, get_font,
 )
 from gnome_mail.ui.widgets import Button, TextArea, Dropdown, ToastManager
-from gnome_mail.gnome_art import draw_gnome_with_quill, draw_toadstool_border
+from gnome_mail.gnome_art import draw_gnome_with_quill, draw_toadstool_border, draw_mini_gnome_head
 from gnome_mail import constants
 
 
@@ -99,9 +99,9 @@ class ComposeScreen:
             self._models = []
 
         if self._models:
-            # Build display names with gnome names
+            # Build display names — gnome names only, no model IDs
             self._model_display = [
-                f"{constants.get_gnome_name(m)} ({m})" for m in self._models
+                constants.get_gnome_name(m) for m in self._models
             ]
             self.dropdown.options = self._model_display
             self.dropdown.selected = 0
@@ -205,3 +205,23 @@ class ComposeScreen:
         self.send_btn.draw(surface)
         # Dropdown drawn last so expanded list renders on top
         self.dropdown.draw(surface)
+
+        # Draw mini gnome heads next to dropdown items
+        if self._models:
+            # Selected item gnome head
+            sel_model = self._models[self.dropdown.selected] if self.dropdown.selected < len(self._models) else ""
+            if sel_model:
+                draw_mini_gnome_head(surface,
+                                     self.dropdown.rect.x + self.dropdown.rect.width - 36,
+                                     self.dropdown.rect.y + self.dropdown.rect.height // 2,
+                                     0.35, sel_model)
+            # Expanded list gnome heads
+            if self.dropdown.expanded:
+                for i, model in enumerate(self._models):
+                    if i >= len(self.dropdown.options):
+                        break
+                    oy = self.dropdown.rect.y + self.dropdown.rect.height + i * self.dropdown._item_height
+                    draw_mini_gnome_head(surface,
+                                         self.dropdown.rect.x + self.dropdown.rect.width - 36,
+                                         oy + self.dropdown._item_height // 2,
+                                         0.35, model)
