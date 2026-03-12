@@ -1,0 +1,161 @@
+"""Right panel — conversation view with lazy-loaded message bodies."""
+
+import pygame
+
+from gnome_mail.ui.theme import (
+    PANEL_BG, TEXT_COLOR, TEXT_DIM, ACCENT_LIGHT, GREEN_ACCENT,
+    ERROR_COLOR, DIVIDER, PADDING, get_font,
+)
+from gnome_mail.ui.widgets import word_wrap_text
+from gnome_mail.gnome_art import draw_gnome, draw_tiny_mushroom
+from gnome_mail import constants, db
+
+
+class MessagePanel:
+    def __init__(self, rect):
+        self.rect = pygame.Rect(rect)
+        self.current_conversation = None
+        self.current_id = None
+        self.scroll_offset = 0
+        self._content_height = 0
+        self._dirty = True
+
+    def update_rect(self, rect):
+        self.rect = pygame.Rect(rect)
+        self._dirty = True
+
+    def load_conversation(self, conversation_id):
+        """Load full conversation from DB. Releases previous body."""
+        self.current_conversation = None  # Release old body
+        self.current_id = conversation_id
+        self.current_conversation = db.get_conversation(conversation_id)
+        self.scroll_offset = 0
+        self._dirty = True
+
+    def reload_current(self):
+        """Reload current conversation (e.g. after response arrives)."""
+        if self.current_id:
+            self.current_conversation = db.get_conversation(self.current_id)
+            self._dirty = True
+
+    def clear(self):
+        self.current_conversation = None
+        self.current_id = None
+        self.scroll_offset = 0
+        self._dirty = True
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos()):
+            max_scroll = max(0, self._content_height - self.rect.height + 60)
+            self.scroll_offset = max(0, min(max_scroll, self.scroll_offset - event.y * 30))
+            self._dirty = True
+            return True
+        return False
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, PANEL_BG, self.rect)
+
+        if not self.current_conversation:
+            # Empty state — no conversation selected
+            font = get_font("body")
+            hint = font.render("Select a scroll from the mushroom patch...", True, TEXT_DIM)
+            surface.blit(hint, (
+                self.rect.x + (self.rect.width - hint.get_width()) // 2,
+                self.rect.y + self.rect.height // 2 - hint.get_height() // 2,
+            ))
+            self._dirty = False
+            return
+
+        conv = self.current_conversation
+        content_x = self.rect.x + PADDING
+        content_w = self.rect.width - 2 * PADDING - 8  # 8 for scrollbar
+        y = self.rect.y + PADDING - self.scroll_offset
+
+        old_clip = surface.get_clip()
+        surface.set_clip(self.rect)
+
+        # Header with tiny mushroom decorations
+        font_title = get_font("title", bold=True)
+        font_body = get_font("body")
+        font_small = get_font("small")
+
+        header_text = conv["model"]
+        header_surf = font_title.render(header_text, True, ACCENT_LIGHT)
+        surface.blit(header_surf, (content_x, y))
+        draw_tiny_mushroom(surface, content_x + header_surf.get_width() + 10, y + 8)
+        draw_tiny_mushroom(surface, content_x + header_surf.get_width() + 28, y + 10)
+        y += header_surf.get_height() + 12
+
+        # Divider
+        pygame.draw.line(surface, DIVIDER, (content_x, y), (content_x + content_w, y))
+        y += 12
+
+        # "You whispered" label
+        you_surf = font_small.render(constants.YOU_LABEL, True, ACCENT_LIGHT)
+        surface.blit(you_surf, (content_x, y))
+        y += you_surf.get_height() + 6
+
+        # User message (word-wrapped)
+        user_lines = word_wrap_text(conv["user_message"], font_body, content_w)
+        for line in user_lines:
+            line_surf = font_body.render(line, True, TEXT_COLOR)
+            surface.blit(line_surf, (content_x, y))
+            y += font_body.get_linesize()
+        y += 20
+
+        # Divider
+        pygame.draw.line(surface, DIVIDER, (content_x, y), (content_x + content_w, y))
+        y += 12
+
+        status = conv["status"]
+        if status == "complete" and conv.get("assistant_response"):
+            # Response label
+            resp_label = constants.RESPONSE_LABEL_TEMPLATE.format(conv["model"])
+            resp_label_surf = font_small.render(resp_label, True, GREEN_ACCENT)
+            surface.blit(resp_label_surf, (content_x, y))
+            y += resp_label_surf.get_height() + 6
+
+            # Response text (word-wrapped)
+            resp_lines = word_wrap_text(conv["assistant_response"], font_body, content_w)
+            for line in resp_lines:
+                line_surf = font_body.render(line, True, TEXT_COLOR)
+                surface.blit(line_surf, (content_x, y))
+                y += font_body.get_linesize()
+
+        elif status == "pending":
+            # Walking gnome + waiting text
+            gnome_x = content_x + content_w // 2
+            gnome_y = y + 20
+            draw_gnome(surface, gnome_x, gnome_y, 1.2, "walking")
+            y += 80
+            wait_surf = font_body.render(constants.WAITING_RESPONSE, True, TEXT_DIM)
+            surface.blit(wait_surf, (content_x + (content_w - wait_surf.get_width()) // 2, y))
+            y += wait_surf.get_height()
+
+        elif status == "error":
+            # Sad gnome + error text
+            gnome_x = content_x + content_w // 2
+            gnome_y = y + 20
+            draw_gnome(surface, gnome_x, gnome_y, 1.2, "sad")
+            y += 80
+            error_text = conv.get("error_text", "Unknown error")
+            error_lines = word_wrap_text(error_text, font_body, content_w)
+            for line in error_lines:
+                line_surf = font_body.render(line, True, ERROR_COLOR)
+                surface.blit(line_surf, (content_x, y))
+                y += font_body.get_linesize()
+
+        self._content_height = y + self.scroll_offset - self.rect.y
+
+        # Scrollbar
+        if self._content_height > self.rect.height:
+            bar_x = self.rect.x + self.rect.width - 6
+            visible_ratio = self.rect.height / self._content_height
+            bar_h = max(20, int(self.rect.height * visible_ratio))
+            max_scroll = self._content_height - self.rect.height + 60
+            ratio = self.scroll_offset / max_scroll if max_scroll > 0 else 0
+            bar_y = self.rect.y + int((self.rect.height - bar_h) * ratio)
+            pygame.draw.rect(surface, DIVIDER, (bar_x, bar_y, 4, bar_h), border_radius=2)
+
+        surface.set_clip(old_clip)
+        self._dirty = False
