@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Gnome Mail
+Comment=Toadstool-powered messaging via Ollama
+Exec=python3 /home/user/gnome-mail/run.py
+Path=/home/user/gnome-mail
+Terminal=false
+Type=Application
+Categories=Utility;
