@@ -15,10 +15,12 @@ from gnome_mail.ui.widgets import Button, ToastManager
 from gnome_mail.ui.inbox_panel import InboxPanel
 from gnome_mail.ui.message_panel import MessagePanel
 from gnome_mail.ui.compose_screen import ComposeScreen
+from gnome_mail.ui.settings_screen import SettingsScreen
 from gnome_mail.gnome_art import (
     draw_mushroom_house, draw_tiny_mushroom, draw_header_decoration,
+    draw_gnome_with_wrench,
 )
-from gnome_mail import constants, db, ollama_worker
+from gnome_mail import constants, db, ollama_worker, crash_report
 
 
 class GnomeMailApp:
@@ -31,6 +33,7 @@ class GnomeMailApp:
 
         # Initialize database
         db.init_db()
+        constants._load_assigned_names()
 
         # State
         self.running = True
@@ -58,6 +61,12 @@ class GnomeMailApp:
             on_resend=self._on_resend_conversation,
         )
         self.compose_screen = ComposeScreen(self.toast_manager)
+        self.settings_screen = SettingsScreen(self.toast_manager)
+
+        # Settings gnome clickable area (bottom-left corner)
+        h = self.screen.get_height()
+        self._settings_gnome_rect = pygame.Rect(4, h - 50, 44, 50)
+        self._settings_hovered = False
 
         # Header button
         self.new_scroll_btn = Button(
@@ -68,6 +77,9 @@ class GnomeMailApp:
         )
         self._update_header_btn()
 
+        # Recover orphaned pending conversations from previous sessions
+        self._recover_orphaned_pending()
+
         # Load inbox
         self.inbox_panel.refresh()
 
@@ -75,13 +87,32 @@ class GnomeMailApp:
         w, h = self.screen.get_size()
         self._inbox_rect = pygame.Rect(0, HEADER_HEIGHT, SIDEBAR_WIDTH, h - HEADER_HEIGHT)
         self._message_rect = pygame.Rect(SIDEBAR_WIDTH + 1, HEADER_HEIGHT, w - SIDEBAR_WIDTH - 1, h - HEADER_HEIGHT)
+        if hasattr(self, "_settings_gnome_rect"):
+            self._settings_gnome_rect = pygame.Rect(4, h - 50, 44, 50)
 
     def _update_header_btn(self):
         w = self.screen.get_width()
         self.new_scroll_btn.rect = pygame.Rect(w - 136, 8, 128, 32)
 
+    def _recover_orphaned_pending(self):
+        """Mark any conversations stuck as 'pending' from a previous session as error,
+        so the user can resend them via Owl Post."""
+        orphans = db.get_orphaned_pending()
+        if orphans:
+            db.mark_orphaned_as_error()
+            count = len(orphans)
+            if count == 1:
+                gnome_name = constants.get_gnome_name(orphans[0]["model"])
+                self.toast_manager.show(f"{gnome_name} got lost! Use Resend by Owl Post to try again.")
+            else:
+                self.toast_manager.show(f"{count} gnomes got lost! Use Resend by Owl Post to try again.")
+
     def _open_compose(self):
         self.compose_screen.open(self.screen.get_size())
+        self.dirty = True
+
+    def _open_settings(self):
+        self.settings_screen.open(self.screen.get_size())
         self.dirty = True
 
     def _on_select_conversation(self, conversation_id):
@@ -107,8 +138,10 @@ class GnomeMailApp:
         if not conv:
             return
         db.reset_to_pending(conversation_id)
+        gnome_name = constants.get_gnome_name(conv["model"])
         ollama_worker.send_message(
-            conversation_id, conv["model"], conv["user_message"], self.result_queue
+            conversation_id, conv["model"], conv["user_message"], self.result_queue,
+            gnome_name=gnome_name,
         )
         self.toast_manager.show(constants.RESEND_TOAST)
         self.inbox_panel.refresh()
@@ -177,6 +210,8 @@ class GnomeMailApp:
                     self._update_header_btn()
                     if self.compose_screen.visible:
                         self.compose_screen._layout(self.screen.get_size())
+                    if self.settings_screen.visible:
+                        self.settings_screen._layout(self.screen.get_size())
                     self.dirty = True
                     continue
 
@@ -184,13 +219,17 @@ class GnomeMailApp:
                 self.last_interaction_time = time.time()
 
                 # Route events
-                if self.compose_screen.visible:
+                if self.settings_screen.visible:
+                    self.settings_screen.handle_event(event)
+                    self.dirty = True
+                elif self.compose_screen.visible:
                     self.compose_screen.handle_event(event)
                     # Check if compose just sent something
                     result = self.compose_screen.get_result()
                     if result:
                         db.save_conversation(result["id"], result["model"], result["subject"], result["user_message"])
-                        ollama_worker.send_message(result["id"], result["model"], result["user_message"], self.result_queue)
+                        gnome_name = constants.get_gnome_name(result["model"])
+                        ollama_worker.send_message(result["id"], result["model"], result["user_message"], self.result_queue, gnome_name=gnome_name)
                         self.inbox_panel.refresh()
                         self.inbox_panel.selected_id = result["id"]
                         self.inbox_panel.scroll_list.selected_index = 0
@@ -200,6 +239,16 @@ class GnomeMailApp:
                     # Header button
                     if self.new_scroll_btn.handle_event(event):
                         self.dirty = True
+
+                    # Settings gnome click (bottom-left)
+                    if event.type == pygame.MOUSEMOTION:
+                        old_hover = self._settings_hovered
+                        self._settings_hovered = self._settings_gnome_rect.collidepoint(event.pos)
+                        if old_hover != self._settings_hovered:
+                            self.dirty = True
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        if self._settings_gnome_rect.collidepoint(event.pos):
+                            self._open_settings()
 
                     # Route to panels based on mouse position
                     if hasattr(event, "pos"):
@@ -246,7 +295,7 @@ class GnomeMailApp:
         pygame.draw.rect(self.screen, BG_COLOR, (0, 0, w, HEADER_HEIGHT))
 
         # Header decoration (vines and tiny mushrooms along bottom of header)
-        draw_header_decoration(self.screen, 0, HEADER_HEIGHT - 2, w)
+        draw_header_decoration(self.screen, 0, HEADER_HEIGHT - 2, w, stop_x=self.new_scroll_btn.rect.x)
 
         # Mushroom house + title
         draw_mushroom_house(self.screen, 28, 6, 0.5)
@@ -270,8 +319,20 @@ class GnomeMailApp:
         # Message panel
         self.message_panel.draw(self.screen)
 
+        # Settings gnome (bottom-left corner, drawn on top of sidebar)
+        gnome_x = self._settings_gnome_rect.x + 22
+        gnome_y = self._settings_gnome_rect.y + 16
+        draw_gnome_with_wrench(self.screen, gnome_x, gnome_y, 0.45)
+        if self._settings_hovered:
+            font_small = get_font("small")
+            tip_surf = font_small.render("Settings", True, TEXT_COLOR)
+            self.screen.blit(tip_surf, (self._settings_gnome_rect.x + 46, self._settings_gnome_rect.y + 18))
+
         # Compose overlay (on top of everything)
         self.compose_screen.draw(self.screen)
+
+        # Settings overlay (on top of everything)
+        self.settings_screen.draw(self.screen)
 
         # Toasts (on top of everything)
         self.toast_manager.draw(self.screen, w, h)

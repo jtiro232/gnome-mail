@@ -10,6 +10,7 @@ from gnome_mail.ui.theme import (
 from gnome_mail.ui.widgets import ScrollableList, Button
 from gnome_mail.gnome_art import (
     draw_gnome_mail_carrier, draw_tiny_mushroom, draw_sidebar_forest_footer,
+    draw_mini_gnome_head,
 )
 from gnome_mail import constants, db
 
@@ -179,14 +180,13 @@ class InboxPanel:
         y = rect.y + 8
         max_text_w = rect.width - PADDING * 2 - 30  # Reserve space for delete btn
 
-        # Tiny mushroom + model gnome name
-        draw_tiny_mushroom(surface, x + 6, y + 6)
+        # Mini gnome head + gnome name
+        draw_mini_gnome_head(surface, x + 10, y + 7, 0.3, item["model"])
         font_small = get_font("small")
         gnome_name = constants.get_gnome_name(item["model"])
-        display_model = f"{gnome_name} ({item['model']})"
-        display_model = _truncate_to_width(display_model, font_small, max_text_w - 20)
+        display_model = _truncate_to_width(gnome_name, font_small, max_text_w - 24)
         model_surf = font_small.render(display_model, True, ACCENT_LIGHT)
-        surface.blit(model_surf, (x + 18, y))
+        surface.blit(model_surf, (x + 22, y))
 
         # Subject — truncate by pixel width
         font_body = get_font("body")

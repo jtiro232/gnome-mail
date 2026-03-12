@@ -8,7 +8,10 @@ from gnome_mail.ui.theme import (
     get_font,
 )
 from gnome_mail.ui.widgets import word_wrap_text, Button
-from gnome_mail.gnome_art import draw_gnome, draw_tiny_mushroom, draw_gnome_snail_riders
+from gnome_mail.gnome_art import (
+    draw_gnome, draw_tiny_mushroom, draw_gnome_snail_riders,
+    draw_mini_gnome_head, draw_flower, draw_grass_tuft,
+)
 from gnome_mail import constants, db
 
 
@@ -122,12 +125,15 @@ class MessagePanel:
         pygame.draw.rect(surface, PANEL_BG, self.rect)
 
         if not self.current_conversation:
-            # Empty state — no conversation selected
+            # Empty state — reading gnome + hint text
+            cx = self.rect.x + self.rect.width // 2
+            cy = self.rect.y + self.rect.height // 2 - 40
+            draw_gnome(surface, cx, cy, 1.5, "reading")
             font = get_font("body")
             hint = font.render("Select a scroll from the mushroom patch...", True, TEXT_DIM)
             surface.blit(hint, (
-                self.rect.x + (self.rect.width - hint.get_width()) // 2,
-                self.rect.y + self.rect.height // 2 - hint.get_height() // 2,
+                cx - hint.get_width() // 2,
+                cy + 70,
             ))
             self._dirty = False
             return
@@ -145,13 +151,14 @@ class MessagePanel:
         font_body = get_font("body")
         font_small = get_font("small")
 
-        # Show gnome name + model
+        # Show gnome name with avatar
         gnome_name = constants.get_gnome_name(conv["model"])
-        header_text = f"{gnome_name} ({conv['model']})"
+        header_text = gnome_name
+        draw_mini_gnome_head(surface, content_x + 12, y + 12, 0.5, conv["model"])
         header_surf = font_title.render(header_text, True, ACCENT_LIGHT)
-        surface.blit(header_surf, (content_x, y))
-        draw_tiny_mushroom(surface, content_x + header_surf.get_width() + 10, y + 8)
-        draw_tiny_mushroom(surface, content_x + header_surf.get_width() + 28, y + 10)
+        surface.blit(header_surf, (content_x + 30, y))
+        draw_tiny_mushroom(surface, content_x + 30 + header_surf.get_width() + 10, y + 8)
+        draw_tiny_mushroom(surface, content_x + 30 + header_surf.get_width() + 28, y + 10)
         y += header_surf.get_height() + 12
 
         # Divider
@@ -236,6 +243,14 @@ class MessagePanel:
             pygame.draw.rect(surface, DIVIDER, (bar_x, bar_y, 4, bar_h), border_radius=2)
 
         surface.set_clip(old_clip)
+
+        # Decorative footer sprites (bottom corners, outside scrollable content)
+        footer_y = self.rect.bottom - 12
+        draw_grass_tuft(surface, self.rect.x + 20, footer_y, 0.5)
+        draw_flower(surface, self.rect.x + 50, footer_y, 0.25, (220, 180, 60))
+        draw_grass_tuft(surface, self.rect.right - 60, footer_y, 0.5)
+        draw_flower(surface, self.rect.right - 35, footer_y, 0.25, (200, 140, 180))
+        draw_tiny_mushroom(surface, self.rect.right - 80, footer_y - 2)
 
         # Draw action buttons ON TOP of clip area (so they're always visible)
         if self._delete_btn:

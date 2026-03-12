@@ -39,6 +39,12 @@ def init_db():
             completed_at TIMESTAMP
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gnome_names (
+            model TEXT PRIMARY KEY,
+            gnome_name TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -110,6 +116,45 @@ def reset_to_pending(id):
     conn.execute(
         "UPDATE conversations SET status = 'pending', error_text = NULL WHERE id = ?",
         (id,),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_orphaned_pending():
+    """Return conversations stuck in 'pending' status (orphaned from a previous session)."""
+    conn = _connect()
+    rows = conn.execute(
+        "SELECT id, model, user_message FROM conversations WHERE status = 'pending'"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def mark_orphaned_as_error():
+    """Mark all pending conversations as error so they can be resent."""
+    conn = _connect()
+    conn.execute(
+        "UPDATE conversations SET status = 'error', error_text = 'The gnome was lost when the app closed. Use Resend by Owl Post to try again.' WHERE status = 'pending'"
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_all_gnome_names():
+    """Return dict of {model: gnome_name} from the gnome_names table."""
+    conn = _connect()
+    rows = conn.execute("SELECT model, gnome_name FROM gnome_names").fetchall()
+    conn.close()
+    return {r["model"]: r["gnome_name"] for r in rows}
+
+
+def set_gnome_name(model, gnome_name):
+    """Set or update a custom gnome name for a model."""
+    conn = _connect()
+    conn.execute(
+        "INSERT OR REPLACE INTO gnome_names (model, gnome_name) VALUES (?, ?)",
+        (model, gnome_name),
     )
     conn.commit()
     conn.close()
