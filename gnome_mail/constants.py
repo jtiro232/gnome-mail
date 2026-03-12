@@ -89,12 +89,26 @@ def _load_assigned_names():
 
 
 def get_gnome_name(model_name):
-    """Return a unique gnome name for a given Ollama model name."""
+    """Return a unique gnome name for a given Ollama model name.
+
+    Names are persisted in the DB so models keep the same name across restarts.
+    Also matches on base name (without :tag) so 'phi3:latest' reuses 'phi3's name.
+    """
+    # Direct match
     if model_name in _assigned_names:
         return _assigned_names[model_name]
 
-    # Try the explicit mapping first
+    # Check if the base name (without :tag) already has an assignment
     base = model_name.split(":")[0] if ":" in model_name else model_name
+    for existing_model, existing_name in _assigned_names.items():
+        existing_base = existing_model.split(":")[0] if ":" in existing_model else existing_model
+        if existing_base == base:
+            # Reuse the same name and save the alias
+            _assigned_names[model_name] = existing_name
+            _save_name(model_name, existing_name)
+            return existing_name
+
+    # Try the explicit mapping first
     candidate = GNOME_NAMES.get(model_name) or GNOME_NAMES.get(base)
 
     used = set(_assigned_names.values())
